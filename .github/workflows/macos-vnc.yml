@@ -16,7 +16,7 @@ jobs:
       - name: Connect Tailscale
         uses: tailscale/github-action@v4.1.3
         with:
-          authkey: ${{ secrets.TS_AUTHKEY }}
+          authkey: ${{ secrets.TS_OAUTH_CLIENT_ID}}
 
       - name: Restore DNS
         shell: bash
