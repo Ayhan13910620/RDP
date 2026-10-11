@@ -1,4 +1,5 @@
- name: macos-vnc
+
+name: Temporary macOS VNC
 
 on:
   workflow_dispatch:
@@ -8,81 +9,30 @@ permissions:
 
 jobs:
   macos-vnc:
-    # Sonoma 14 is scheduled to become unsupported in GitHub runner images on 2026-11-02.
-    # Change to macos-15 if Sonoma 14 is no longer available.
     runs-on: macos-14
-    timeout-minutes: 35
+    timeout-minutes: 30
 
     steps:
-      - name: Connect temporary runner to Tailscale
+      - name: Connect Tailscale
         uses: tailscale/github-action@v4.1.3
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
-      # Tailscale Action issue #315 reports DNS replacement can cancel macOS jobs.
-      # This session uses direct Tailscale IPs, so restore normal DNS immediately.
-      - name: Restore normal DNS on the runner
+      - name: Restore DNS
         shell: bash
         run: |
           sudo networksetup -setdnsservers Ethernet Empty || true
 
-      - name: Configure VNC and test the local VNC port
-        shell: bash
-        env:
-          VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if [[ ${#VNC_PASSWORD} -ne 8 ]]; then
-            echo "VNC_PASSWORD must be exactly 8 characters for legacy macOS VNC authentication."
-            exit 1
-          fi
-
-          KICKSTART="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart"
-          if [[ ! -x "$KICKSTART" ]]; then
-            echo "Apple Remote Management kickstart tool was not found."
-            exit 1
-          fi
-
-          CURRENT_USER="$(id -un)"
-          sudo "$KICKSTART" -configure -access -on -users "$CURRENT_USER" -privs -all
-          sudo "$KICKSTART" -configure -clientopts -setvnclegacy -vnclegacy yes
-          sudo "$KICKSTART" -configure -clientopts -setvncpw -vncpw "$VNC_PASSWORD"
-          sudo "$KICKSTART" -activate
-          sudo "$KICKSTART" -restart -agent -console
-
-          # A local TCP listener is a necessary check, but it does not prove
-          # that a remote VNC connection will succeed.
-          for attempt in {1..15}; do
-            if nc -z 127.0.0.1 5900; then
-              echo "VNC_LISTENER_CHECK=passed"
-              exit 0
-            fi
-            sleep 2
-          done
-
-          echo "VNC_LISTENER_CHECK=failed; hosted macOS may block Screen Sharing/VNC."
-          exit 1
-
-      - name: Print temporary connection address
+      - name: Check macOS and Tailscale
         shell: bash
         run: |
           set -euo pipefail
-          TS_IP="$(sudo tailscale ip -4 | head -n 1)"
-          if [[ -z "$TS_IP" ]]; then
-            echo "Could not obtain a Tailscale IPv4 address."
-            exit 1
-          fi
-          {
-            echo "## Temporary macOS VNC session"
-            echo
-            echo "- Address: ${TS_IP}:5900"
-            echo "- Open MobaXterm → Session → VNC and enter the IP address and port 5900."
-            echo "- Use the VNC_PASSWORD repository secret as the VNC password."
-            echo "- The local listener was checked, but this does not prove end-to-end remote connectivity."
-            echo "- The runner is temporary and will be destroyed after the job ends."
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "Temporary Tailscale IPv4: $TS_IP"
+          sw_vers
+          tailscale status
+          tailscale ip -4
 
-      - name: Keep the temporary session available for 20 minutes
+      - name: Verify runner environment
         shell: bash
-        run: sleep 1200
+        run: |
+          echo "Runner check completed."
+          echo "VNC has not yet been configured or verified."
