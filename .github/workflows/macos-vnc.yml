@@ -1,4 +1,4 @@
- name: Temporary macOS VNC (20 minutes)
+ name: macos-vnc
 
 on:
   workflow_dispatch:
